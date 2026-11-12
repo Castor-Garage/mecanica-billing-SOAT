@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Modelo inicial do dominio de Billing (Fase 4). Ver ADR 0006 e RFC 0004 em
+// mecanica-pos-SOAT/docs para o desenho completo da saga e da divisao de
+// bancos. PaymentAttempt (payloads crus de webhook do Mercado Pago) fica em
+// MongoDB/DynamoDB, fora deste schema - a ser adicionado junto com a
+// implementacao da Fase 2 do backlog.
+
+enum QuoteStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+enum PaymentStatus {
+  PENDENTE
+  CONFIRMADO
+  FALHOU
+}
+
+model Quote {
+  id             String      @id @default(uuid())
+  // id da Ordem de Servico no OS Service - nao ha FK entre bancos, apenas
+  // referencia logica recebida no comando GerarOrcamento (SQS billing-commands).
+  serviceOrderId String      @map("service_order_id")
+  totalAmount    Decimal     @map("total_amount") @db.Decimal(10, 2)
+  status         QuoteStatus @default(PENDENTE)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  approvedAt     DateTime?   @map("approved_at")
+  rejectedAt     DateTime?   @map("rejected_at")
+
+  payments Payment[]
+
+  @@index([serviceOrderId])
+  @@map("quotes")
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  quoteId           String        @map("quote_id")
+  serviceOrderId    String        @map("service_order_id")
+  provider          String        @default("MERCADO_PAGO")
+  providerPaymentId String?       @map("provider_payment_id")
+  amount            Decimal       @db.Decimal(10, 2)
+  status            PaymentStatus @default(PENDENTE)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  confirmedAt       DateTime?     @map("confirmed_at")
+  failedAt          DateTime?     @map("failed_at")
+
+  quote Quote @relation(fields: [quoteId], references: [id])
+
+  @@index([serviceOrderId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
