@@ -48,12 +48,14 @@ model Payment {
   serviceOrderId    String        @map("service_order_id")
   provider          String        @default("MERCADO_PAGO")
   providerPaymentId String?       @map("provider_payment_id")
+  checkoutUrl       String?       @map("checkout_url")
   amount            Decimal       @db.Decimal(10, 2)
   status            PaymentStatus @default(PENDENTE)
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
   confirmedAt       DateTime?     @map("confirmed_at")
   failedAt          DateTime?     @map("failed_at")
+  failureReason     String?       @map("failure_reason")
 
   quote Quote @relation(fields: [quoteId], references: [id])
 

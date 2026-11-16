@@ -9,13 +9,15 @@ import { ZodError } from 'zod'
 import { loggerOptions } from '../observability/logger.js'
 import { requestContext, resolveRequestId } from '../observability/request-context.js'
 import { BusinessEventLogger } from '../observability/events.js'
+import { webhookRoutes } from './routes/webhook.routes.js'
+import { bootstrapBillingCommandsConsumer } from '../messaging/bootstrapConsumers.js'
 
 const REQUEST_ID_HEADER = 'x-request-id'
 
 // Billing Service nao tem fachada publica propria (ver ADR 0006): o unico
 // endpoint HTTP alem do /health e o webhook do Mercado Pago, que chega aqui
-// de fora. O comando GerarOrcamento chega via SQS (consumer a adicionar na
-// Fase 2 do backlog), nao por rota HTTP.
+// de fora. Os comandos (GerarOrcamento/AprovarOrcamento/RejeitarOrcamento)
+// chegam via mensageria, consumidos por bootstrapBillingCommandsConsumer.
 export function buildServer() {
   const app = Fastify({
     logger: loggerOptions(),
@@ -34,8 +36,8 @@ export function buildServer() {
     requestContext.run({ requestId: request.id }, done)
   })
 
-  // TODO (Fase 2): POST /webhooks/mercadopago - confirmar pagamento e publicar
-  // PagamentoConfirmado/PagamentoFalhou em os-events (ver ADR 0006).
+  app.register(webhookRoutes)
+  bootstrapBillingCommandsConsumer(app.log)
 
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
