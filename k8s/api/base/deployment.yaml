@@ -66,9 +66,37 @@ spec:
                 configMapKeyRef:
                   name: billing-config
                   key: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
-            # TODO (Fase 2/5 do backlog): MERCADOPAGO_ACCESS_TOKEN,
-            # MERCADOPAGO_WEBHOOK_SECRET, NOSQL_CONNECTION_STRING,
-            # SQS_BILLING_COMMANDS_QUEUE_URL, SQS_OS_EVENTS_QUEUE_URL
+            # Credenciais AWS (SQS/DynamoDB) vem da LabRole dos nodes via IMDS -
+            # nao ha access key aqui, so a regiao.
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: AWS_REGION
+            - name: DYNAMODB_PAYMENT_ATTEMPTS_TABLE
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: DYNAMODB_PAYMENT_ATTEMPTS_TABLE
+            - name: MERCADOPAGO_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: MERCADOPAGO_ACCESS_TOKEN
+            # Opcionais: so existem em producao (staging nao tem filas proprias
+            # - ver pipeline).
+            - name: SQS_BILLING_COMMANDS_QUEUE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: SQS_BILLING_COMMANDS_QUEUE_URL
+                  optional: true
+            - name: SQS_OS_EVENTS_QUEUE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: SQS_OS_EVENTS_QUEUE_URL
+                  optional: true
           livenessProbe:
             httpGet:
               path: /health

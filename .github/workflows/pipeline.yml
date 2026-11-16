@@ -129,15 +129,31 @@ jobs:
       - name: Aplicar manifesto de namespace
         run: kubectl apply -f k8s/api/overlays/production/namespace.yaml
 
-      # billing-secret e aplicado manualmente nesse namespace (DATABASE_URL,
-      # credenciais do Mercado Pago, URLs das filas SQS) - so a chave da New
-      # Relic e mantida em dia aqui, via patch.
-      - name: Atualizar license key da New Relic no Secret (production)
+      # billing-secret e (re)criado a cada deploy, sem nada aplicado a mao no
+      # cluster: banco e tabela DynamoDB vem do SSM publicado por
+      # mecanica-db-infra-SOAT, filas do SSM publicado por
+      # mecanica-k8s-infra-SOAT, e as chaves de terceiros (New Relic, Mercado
+      # Pago) dos secrets do GitHub. Le cada parametro numa variavel antes de
+      # montar o Secret para o step falhar (set -e) se algum nao existir.
+      - name: Montar Secret do servico a partir do SSM (production)
         run: |
-          kubectl --context "${EKS_CLUSTER}" -n castor-garage-production patch secret billing-secret \
-            --type merge -p "{\"stringData\":{\"NEW_RELIC_LICENSE_KEY\":\"${NEW_RELIC_LICENSE_KEY}\"}}"
+          ssm() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text; }
+          DATABASE_URL=$(ssm /castor-garage/billing/database-url)
+          echo "::add-mask::${DATABASE_URL}"
+          PAYMENT_ATTEMPTS_TABLE=$(ssm /castor-garage/billing/payment-attempts-table)
+          BILLING_COMMANDS_URL=$(ssm /castor-garage/queues/billing-commands-url)
+          OS_EVENTS_URL=$(ssm /castor-garage/queues/os-events-url)
+          kubectl --context "${EKS_CLUSTER}" -n castor-garage-production create secret generic billing-secret \
+            --from-literal=DATABASE_URL="${DATABASE_URL}" \
+            --from-literal=DYNAMODB_PAYMENT_ATTEMPTS_TABLE="${PAYMENT_ATTEMPTS_TABLE}" \
+            --from-literal=SQS_BILLING_COMMANDS_QUEUE_URL="${BILLING_COMMANDS_URL}" \
+            --from-literal=SQS_OS_EVENTS_QUEUE_URL="${OS_EVENTS_URL}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
+            --from-literal=MERCADOPAGO_ACCESS_TOKEN="${MERCADOPAGO_ACCESS_TOKEN}" \
+            --dry-run=client -o yaml | kubectl --context "${EKS_CLUSTER}" apply -f -
         env:
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
 
       - name: Patch da tag de imagem (production)
         run: |
@@ -148,6 +164,45 @@ jobs:
 
       - name: Aguardar rollout (production)
         run: kubectl --context "${EKS_CLUSTER}" -n castor-garage-production rollout status deployment/billing-api --timeout=180s
+
+      # O Service do Billing e LoadBalancer so por causa do webhook do Mercado
+      # Pago (POST /webhooks/mercadopago), que precisa de uma URL publica - o
+      # resto da integracao com o OS Service e por SQS.
+      - name: Descobrir hostname do LoadBalancer (production)
+        id: lb
+        run: |
+          for i in $(seq 1 20); do
+            HOST=$(kubectl --context "${EKS_CLUSTER}" -n castor-garage-production get svc billing-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            if [ -n "$HOST" ]; then
+              echo "hostname=$HOST" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "aguardando o Load Balancer provisionar... ($i/20)"
+            sleep 15
+          done
+          echo "Load Balancer nao ficou pronto a tempo" >&2
+          exit 1
+
+      - name: Smoke test (/health) - production
+        run: |
+          HOST="${{ steps.lb.outputs.hostname }}"
+          for i in $(seq 1 15); do
+            if curl -sf "http://${HOST}:3000/health"; then exit 0; fi
+            echo "aguardando o Billing responder... ($i/15)"
+            sleep 10
+          done
+          echo "Billing nao respondeu a tempo" >&2
+          exit 1
+
+      - name: Publicar URL do webhook no SSM Parameter Store (production)
+        run: |
+          WEBHOOK_URL="http://${{ steps.lb.outputs.hostname }}:3000/webhooks/mercadopago"
+          aws ssm put-parameter \
+            --name /castor-garage/production/billing-webhook-url \
+            --type String \
+            --overwrite \
+            --value "${WEBHOOK_URL}"
+          echo "Webhook do Mercado Pago (cadastrar no painel): ${WEBHOOK_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:
     name: Deploy em staging (develop)
@@ -176,12 +231,25 @@ jobs:
       - name: Aplicar manifesto de namespace (staging)
         run: kubectl apply -f k8s/api/overlays/staging/namespace.yaml
 
-      - name: Atualizar license key da New Relic no Secret (staging)
+      # Mesmo esquema do deploy de producao, com o database de staging. Sem
+      # URLs de fila: so existe um conjunto de filas SQS (de producao) e
+      # staging consumindo dele roubaria mensagens da saga de producao - as
+      # variaveis SQS_* sao opcionais no Deployment e ficam vazias aqui.
+      - name: Montar Secret do servico a partir do SSM (staging)
         run: |
-          kubectl --context "${EKS_CLUSTER}" -n castor-garage-staging patch secret billing-secret \
-            --type merge -p "{\"stringData\":{\"NEW_RELIC_LICENSE_KEY\":\"${NEW_RELIC_LICENSE_KEY}\"}}"
+          ssm() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text; }
+          DATABASE_URL=$(ssm /castor-garage/billing/database-url-staging)
+          echo "::add-mask::${DATABASE_URL}"
+          PAYMENT_ATTEMPTS_TABLE=$(ssm /castor-garage/billing/payment-attempts-table)
+          kubectl --context "${EKS_CLUSTER}" -n castor-garage-staging create secret generic billing-secret \
+            --from-literal=DATABASE_URL="${DATABASE_URL}" \
+            --from-literal=DYNAMODB_PAYMENT_ATTEMPTS_TABLE="${PAYMENT_ATTEMPTS_TABLE}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
+            --from-literal=MERCADOPAGO_ACCESS_TOKEN="${MERCADOPAGO_ACCESS_TOKEN}" \
+            --dry-run=client -o yaml | kubectl --context "${EKS_CLUSTER}" apply -f -
         env:
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
 
       - name: Patch da tag de imagem (staging)
         run: |
@@ -192,3 +260,39 @@ jobs:
 
       - name: Aguardar rollout (staging)
         run: kubectl --context "${EKS_CLUSTER}" -n castor-garage-staging rollout status deployment/billing-api --timeout=180s
+
+      - name: Descobrir hostname do LoadBalancer (staging)
+        id: lb
+        run: |
+          for i in $(seq 1 20); do
+            HOST=$(kubectl --context "${EKS_CLUSTER}" -n castor-garage-staging get svc billing-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            if [ -n "$HOST" ]; then
+              echo "hostname=$HOST" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "aguardando o Load Balancer provisionar... ($i/20)"
+            sleep 15
+          done
+          echo "Load Balancer nao ficou pronto a tempo" >&2
+          exit 1
+
+      - name: Smoke test (/health) - staging
+        run: |
+          HOST="${{ steps.lb.outputs.hostname }}"
+          for i in $(seq 1 15); do
+            if curl -sf "http://${HOST}:3000/health"; then exit 0; fi
+            echo "aguardando o Billing responder... ($i/15)"
+            sleep 10
+          done
+          echo "Billing nao respondeu a tempo" >&2
+          exit 1
+
+      - name: Publicar URL do webhook no SSM Parameter Store (staging)
+        run: |
+          WEBHOOK_URL="http://${{ steps.lb.outputs.hostname }}:3000/webhooks/mercadopago"
+          aws ssm put-parameter \
+            --name /castor-garage/staging/billing-webhook-url \
+            --type String \
+            --overwrite \
+            --value "${WEBHOOK_URL}"
+          echo "Webhook do Mercado Pago (cadastrar no painel): ${WEBHOOK_URL}" >> "$GITHUB_STEP_SUMMARY"
