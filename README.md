@@ -45,6 +45,40 @@ assíncrona via mensageria.
       `NEW_RELIC_LICENSE_KEY`, credenciais do Mercado Pago)
 - [ ] Testar a integração com um access token de sandbox do Mercado Pago
 
+## Testar a integração com Mercado Pago (sandbox)
+
+O enunciado da Fase 4 exige integração com o Mercado Pago (não é uma
+escolha nossa, está no PDF do desafio). Para testar sem precisar de conta
+de produção/aprovação:
+
+1. Crie (ou use) uma conta no [painel de desenvolvedores do Mercado
+   Pago](https://www.mercadopago.com.br/developers/panel) e, dentro dela,
+   uma aplicação (qualquer nome, ex. "Castor Garage - Billing").
+2. Na aplicação, em **Credenciais de teste**, pegue o `Access Token` de
+   teste (prefixo `TEST-`) — ele já vem pronto, sem precisar de aprovação.
+3. Rode o script abaixo para gerar os 2 usuários de teste (vendedor e
+   comprador) que o Mercado Pago exige para simular o Checkout Pro de
+   ponta a ponta:
+   ```bash
+   MERCADOPAGO_ACCESS_TOKEN=TEST-... npm run mp:create-test-users
+   ```
+4. Dentro da conta de teste do **vendedor** impressa pelo script, crie
+   outra aplicação e pegue o `Access Token` de teste dela — é esse valor
+   que vai em `MERCADOPAGO_ACCESS_TOKEN` no `.env` (e, mais tarde, no
+   secret `MERCADOPAGO_ACCESS_TOKEN` do GitHub Actions deste repositório).
+5. Chame `GenerateQuoteUseCase`/`ApproveQuoteUseCase` localmente (ou via
+   `npm run test:integration`, que já inclui um smoke test real contra a
+   API — pulado automaticamente se a variável não estiver definida) e
+   abra o `checkoutUrl` retornado.
+6. Faça login no checkout com o e-mail/senha do usuário de teste
+   **comprador** e pague com um dos [cartões de
+   teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/additional-content/test-cards)
+   (há cartões específicos para simular aprovado, recusado e pendente).
+7. Confirme que o webhook (`POST /webhooks/mercadopago`) processou o
+   pagamento — para receber a notificação localmente é preciso expor a
+   porta com um túnel (ex. `ngrok http 3000`) e cadastrar a URL em
+   **Webhooks** na aplicação do Mercado Pago.
+
 ## Banco de dados
 
 PostgreSQL próprio (ver `prisma/schema.prisma`): `Quote` e `Payment`.
@@ -86,7 +120,10 @@ namespaces `castor-garage-staging`/`castor-garage-production`.
 
 Secrets necessários no repositório (GitHub Actions): `AWS_ACCESS_KEY_ID`,
 `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `NEW_RELIC_LICENSE_KEY`,
-`SONAR_TOKEN`.
+`SONAR_TOKEN`. Opcional: `MERCADOPAGO_ACCESS_TOKEN` (credencial de teste do
+vendedor — ver "Testar a integração com Mercado Pago (sandbox)" acima);
+sem ele o smoke test real do Mercado Pago só é pulado, o resto do pipeline
+roda normalmente.
 
 ## Saga Pattern
 

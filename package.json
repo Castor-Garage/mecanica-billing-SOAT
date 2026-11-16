@@ -17,7 +17,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mp:create-test-users": "tsx scripts/create-mp-test-users.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
