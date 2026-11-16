@@ -22,23 +22,28 @@ microsserviços com Saga Pattern.
 
 Este serviço **não expõe uma API pública de uso geral** — o único
 endpoint HTTP voltado para fora é o webhook do Mercado Pago
-(`POST /webhooks/mercadopago`, a implementar). Toda a integração com o
-OS Service é assíncrona via SQS.
+(`POST /webhooks/mercadopago`). Toda a integração com o OS Service é
+assíncrona via mensageria.
 
-## Estado atual (scaffold inicial - Fase 1 do backlog)
+## Estado atual (Fase 2 do backlog concluída)
 
-Este repositório ainda contém apenas a base de infraestrutura/observabilidade
-(Fastify, Prisma, logger, tratamento de erros, CI/CD, Docker, Kubernetes),
-replicada do padrão já validado em `mecanica-pos-SOAT`. **Ainda faltam** (ver
-plano de migração completo no repo principal):
-
-- [ ] Consumer SQS do comando `GerarOrcamento` e publisher dos eventos em `os-events`
-- [ ] Use cases de orçamento/aprovação/pagamento
-- [ ] Integração com Mercado Pago (Checkout + webhook)
+- [x] Consumer do comando `GerarOrcamento`/`AprovarOrcamento`/`RejeitarOrcamento`
+      e publisher dos eventos em `os-events` — hoje sobre `InMemoryMessageBus`
+      (porta `IMessageBus`), SQS real entra na Fase 5 sem mudar os use cases
+- [x] Use cases de orçamento/aprovação/pagamento (`GenerateQuoteUseCase`,
+      `ApproveQuoteUseCase`, `RejectQuoteUseCase`, `ConfirmPaymentUseCase`,
+      `FailPaymentUseCase`)
+- [x] Integração com Mercado Pago atrás da porta `IPaymentProvider`
+      (Checkout Pro: criação de preferência + consulta de status no
+      webhook) — **ainda não testada contra a API real**, falta um access
+      token de sandbox
+- [x] Testes unitários dos use cases: 52 testes, ~97% de cobertura em
+      domínio/aplicação
 - [ ] Banco NoSQL (MongoDB/DynamoDB) para `PaymentAttempt`/payloads de webhook
-- [ ] Testes unitários dos use cases (cobertura ≥80%) e 1 fluxo BDD
+- [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços)
 - [ ] Secrets de produção/staging (`billing-secret`: `DATABASE_URL`,
       `NEW_RELIC_LICENSE_KEY`, credenciais do Mercado Pago)
+- [ ] Testar a integração com um access token de sandbox do Mercado Pago
 
 ## Banco de dados
 
