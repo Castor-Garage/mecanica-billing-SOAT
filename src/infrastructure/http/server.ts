@@ -15,6 +15,7 @@ import { BusinessEventLogger } from '../observability/events.js'
 import { webhookRoutes } from './routes/webhook.routes.js'
 import { stripeWebhookRoutes } from './routes/stripeWebhook.routes.js'
 import { billingRoutes } from './routes/billing.routes.js'
+import { debugRoutes } from './routes/debug.routes.js'
 import { bootstrapBillingCommandsConsumer } from '../messaging/bootstrapConsumers.js'
 
 const REQUEST_ID_HEADER = 'x-request-id'
@@ -61,6 +62,7 @@ export async function buildServer() {
   app.register(webhookRoutes)
   app.register(stripeWebhookRoutes)
   app.register(billingRoutes)
+  app.register(debugRoutes)
   bootstrapBillingCommandsConsumer(app.log)
 
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
