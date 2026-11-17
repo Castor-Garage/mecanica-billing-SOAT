@@ -29,6 +29,7 @@ export interface CreatePaymentInput {
 export interface IPaymentRepository {
   create(input: CreatePaymentInput): Promise<PaymentRecord>
   findById(id: string): Promise<PaymentRecord | null>
+  findByQuoteId(quoteId: string): Promise<PaymentRecord[]>
   confirm(id: string, providerPaymentId: string): Promise<PaymentRecord>
   fail(id: string, providerPaymentId: string, reason: string): Promise<PaymentRecord>
 }

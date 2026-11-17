@@ -13,7 +13,7 @@ import { messageBus } from '../../messaging/bus.js'
 // Verifica a assinatura HMAC-SHA256 que o Mercado Pago envia em x-signature.
 // Formato do header: "ts=<timestamp>,v1=<hmac>"
 // String assinada:   "id:{data.id};request-id:{x-request-id};ts:{ts};"
-function verifyMpSignature(
+export function verifyMpSignature(
   dataId: string,
   xSignature: string,
   xRequestId: string,

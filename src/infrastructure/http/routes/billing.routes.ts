@@ -32,6 +32,28 @@ const paymentSchema = z.object({
   failureReason: z.string().nullable(),
 })
 
+function serializeQuote(q: import('../../../domain/quote/repositories/IQuoteRepository.js').QuoteRecord) {
+  return {
+    ...q,
+    totalAmount: Number(q.totalAmount),
+    createdAt: q.createdAt.toISOString(),
+    updatedAt: q.updatedAt.toISOString(),
+    approvedAt: q.approvedAt?.toISOString() ?? null,
+    rejectedAt: q.rejectedAt?.toISOString() ?? null,
+  }
+}
+
+function serializePayment(p: import('../../../domain/payment/repositories/IPaymentRepository.js').PaymentRecord) {
+  return {
+    ...p,
+    amount: Number(p.amount),
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    confirmedAt: p.confirmedAt?.toISOString() ?? null,
+    failedAt: p.failedAt?.toISOString() ?? null,
+  }
+}
+
 export async function billingRoutes(app: FastifyInstance) {
   const typed = app.withTypeProvider<ZodTypeProvider>()
   const quoteRepo = new PrismaQuoteRepository()
@@ -50,7 +72,23 @@ export async function billingRoutes(app: FastifyInstance) {
     async (request) => {
       const quote = await quoteRepo.findById(request.params.id)
       if (!quote) throw new NotFoundError('Orçamento', request.params.id)
-      return { ...quote, createdAt: quote.createdAt.toISOString(), updatedAt: quote.updatedAt.toISOString(), approvedAt: quote.approvedAt?.toISOString() ?? null, rejectedAt: quote.rejectedAt?.toISOString() ?? null }
+      return serializeQuote(quote)
+    },
+  )
+
+  typed.get(
+    '/quotes',
+    {
+      schema: {
+        tags: ['Quotes'],
+        summary: 'Lista orçamentos por ordem de serviço',
+        querystring: z.object({ serviceOrderId: z.string().uuid() }),
+        response: { 200: z.array(quoteSchema) },
+      },
+    },
+    async (request) => {
+      const quotes = await quoteRepo.findByServiceOrderId(request.query.serviceOrderId)
+      return quotes.map(serializeQuote)
     },
   )
 
@@ -67,7 +105,23 @@ export async function billingRoutes(app: FastifyInstance) {
     async (request) => {
       const payment = await paymentRepo.findById(request.params.id)
       if (!payment) throw new NotFoundError('Pagamento', request.params.id)
-      return { ...payment, createdAt: payment.createdAt.toISOString(), updatedAt: payment.updatedAt.toISOString(), confirmedAt: payment.confirmedAt?.toISOString() ?? null, failedAt: payment.failedAt?.toISOString() ?? null }
+      return serializePayment(payment)
+    },
+  )
+
+  typed.get(
+    '/payments',
+    {
+      schema: {
+        tags: ['Payments'],
+        summary: 'Lista pagamentos por orçamento',
+        querystring: z.object({ quoteId: z.string().uuid() }),
+        response: { 200: z.array(paymentSchema) },
+      },
+    },
+    async (request) => {
+      const payments = await paymentRepo.findByQuoteId(request.query.quoteId)
+      return payments.map(serializePayment)
     },
   )
 }

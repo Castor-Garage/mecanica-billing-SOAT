@@ -19,6 +19,7 @@ export interface CreateQuoteInput {
 export interface IQuoteRepository {
   create(input: CreateQuoteInput): Promise<QuoteRecord>
   findById(id: string): Promise<QuoteRecord | null>
+  findByServiceOrderId(serviceOrderId: string): Promise<QuoteRecord[]>
   approve(id: string): Promise<QuoteRecord>
   reject(id: string): Promise<QuoteRecord>
 }

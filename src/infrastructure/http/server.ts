@@ -2,8 +2,11 @@ import Fastify, { type FastifyError } from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler,
+  jsonSchemaTransform,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod'
+import fastifySwagger from '@fastify/swagger'
+import fastifySwaggerUi from '@fastify/swagger-ui'
 import { AppError } from '../../shared/errors/AppError.js'
 import { ZodError } from 'zod'
 import { loggerOptions } from '../observability/logger.js'
@@ -19,7 +22,7 @@ const REQUEST_ID_HEADER = 'x-request-id'
 // endpoint HTTP alem do /health e o webhook do Mercado Pago, que chega aqui
 // de fora. Os comandos (GerarOrcamento/AprovarOrcamento/RejeitarOrcamento)
 // chegam via mensageria, consumidos por bootstrapBillingCommandsConsumer.
-export function buildServer() {
+export async function buildServer() {
   const app = Fastify({
     logger: loggerOptions(),
     requestIdHeader: false,
@@ -31,6 +34,23 @@ export function buildServer() {
 
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
+
+  await app.register(fastifySwagger, {
+    openapi: {
+      info: { title: 'Billing Service', version: '0.1.0', description: 'Orçamentos e pagamentos — SOAT Fase 4' },
+      tags: [
+        { name: 'Quotes', description: 'Orçamentos' },
+        { name: 'Payments', description: 'Pagamentos' },
+        { name: 'Webhooks', description: 'Notificações de provedores de pagamento' },
+      ],
+    },
+    transform: jsonSchemaTransform,
+  })
+
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  })
 
   app.addHook('onRequest', (request, reply, done) => {
     reply.header(REQUEST_ID_HEADER, request.id)
