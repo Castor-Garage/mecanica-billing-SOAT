@@ -1,7 +1,9 @@
 import { InMemoryMessageBus } from './InMemoryMessageBus.js'
+import { SqsMessageBus } from './SqsMessageBus.js'
 import type { IMessageBus } from '../../domain/shared/messaging/IMessageBus.js'
 
-// Instancia unica do processo - o consumer de billing-commands (bootstrap.ts)
-// e a rota de webhook publicam/consomem na mesma instancia. Troque por um
-// adapter SQS real na Fase 5 mantendo este ponto de composicao unico.
-export const messageBus: IMessageBus = new InMemoryMessageBus()
+// Ponto de composição único: SQS quando SQS_BILLING_COMMANDS_QUEUE_URL estiver
+// configurado (staging/produção), InMemory caso contrário (dev local).
+const useSqs = !!process.env.SQS_BILLING_COMMANDS_QUEUE_URL
+
+export const messageBus: IMessageBus = useSqs ? new SqsMessageBus() : new InMemoryMessageBus()

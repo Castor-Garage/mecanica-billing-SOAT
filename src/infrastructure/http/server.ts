@@ -13,6 +13,7 @@ import { loggerOptions } from '../observability/logger.js'
 import { requestContext, resolveRequestId } from '../observability/request-context.js'
 import { BusinessEventLogger } from '../observability/events.js'
 import { webhookRoutes } from './routes/webhook.routes.js'
+import { stripeWebhookRoutes } from './routes/stripeWebhook.routes.js'
 import { billingRoutes } from './routes/billing.routes.js'
 import { bootstrapBillingCommandsConsumer } from '../messaging/bootstrapConsumers.js'
 
@@ -58,6 +59,7 @@ export async function buildServer() {
   })
 
   app.register(webhookRoutes)
+  app.register(stripeWebhookRoutes)
   app.register(billingRoutes)
   bootstrapBillingCommandsConsumer(app.log)
 
