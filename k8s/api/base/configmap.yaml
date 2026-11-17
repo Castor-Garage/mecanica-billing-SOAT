@@ -10,3 +10,8 @@ data:
   NEW_RELIC_AI_MONITORING_ENABLED: "true"
   NEW_RELIC_CUSTOM_INSIGHTS_EVENTS_MAX_SAMPLES_STORED: "100k"
   NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED: "10k"
+  MONGO_DB_NAME: "mecanica_billing"
+  AWS_REGION: "us-east-1"
+  # Preencher com a URL pública do ingress/load balancer antes do deploy
+  WEBHOOK_BASE_URL: ""
+  FRONTEND_URL: ""

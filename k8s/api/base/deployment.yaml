@@ -66,9 +66,51 @@ spec:
                 configMapKeyRef:
                   name: billing-config
                   key: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
-            # TODO (Fase 2/5 do backlog): MERCADOPAGO_ACCESS_TOKEN,
-            # MERCADOPAGO_WEBHOOK_SECRET, NOSQL_CONNECTION_STRING,
-            # SQS_BILLING_COMMANDS_QUEUE_URL, SQS_OS_EVENTS_QUEUE_URL
+            - name: MERCADOPAGO_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: MERCADOPAGO_ACCESS_TOKEN
+            - name: MERCADOPAGO_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: MERCADOPAGO_WEBHOOK_SECRET
+            - name: NOSQL_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: NOSQL_CONNECTION_STRING
+            - name: MONGO_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: MONGO_DB_NAME
+            - name: WEBHOOK_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: WEBHOOK_BASE_URL
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: FRONTEND_URL
+            - name: SQS_BILLING_COMMANDS_QUEUE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: SQS_BILLING_COMMANDS_QUEUE_URL
+            - name: SQS_OS_EVENTS_QUEUE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: SQS_OS_EVENTS_QUEUE_URL
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: AWS_REGION
           livenessProbe:
             httpGet:
               path: /health

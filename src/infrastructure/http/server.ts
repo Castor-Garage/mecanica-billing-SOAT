@@ -10,6 +10,7 @@ import { loggerOptions } from '../observability/logger.js'
 import { requestContext, resolveRequestId } from '../observability/request-context.js'
 import { BusinessEventLogger } from '../observability/events.js'
 import { webhookRoutes } from './routes/webhook.routes.js'
+import { billingRoutes } from './routes/billing.routes.js'
 import { bootstrapBillingCommandsConsumer } from '../messaging/bootstrapConsumers.js'
 
 const REQUEST_ID_HEADER = 'x-request-id'
@@ -37,6 +38,7 @@ export function buildServer() {
   })
 
   app.register(webhookRoutes)
+  app.register(billingRoutes)
   bootstrapBillingCommandsConsumer(app.log)
 
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
