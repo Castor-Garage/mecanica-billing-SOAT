@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify'
+import newrelic from 'newrelic'
 import { messageBus } from './bus.js'
 import { BILLING_COMMANDS_QUEUE, type BillingCommand } from '../../domain/shared/messaging/topics.js'
 import { PrismaQuoteRepository } from '../database/repositories/PrismaQuoteRepository.js'
@@ -22,20 +23,34 @@ export function bootstrapBillingCommandsConsumer(log: FastifyBaseLogger): void {
   const rejectQuote = new RejectQuoteUseCase(quoteRepo, messageBus)
 
   messageBus.subscribe<BillingCommand>(BILLING_COMMANDS_QUEUE, async (command) => {
-    try {
-      switch (command.type) {
-        case 'GerarOrcamento':
-          await generateQuote.execute(command)
-          break
-        case 'AprovarOrcamento':
-          await approveQuote.execute(command.quoteId)
-          break
-        case 'RejeitarOrcamento':
-          await rejectQuote.execute(command.quoteId)
-          break
+    // Consumo de fila nao passa por uma transacao HTTP, entao o agente do
+    // New Relic nao traca nada aqui por padrao - sem isso, cada comando
+    // processado e invisivel no APM. startBackgroundTransaction cria uma
+    // transacao propria por comando, com o tipo como atributo pesquisavel.
+    await newrelic.startBackgroundTransaction(`saga/billing-commands/${command.type}`, async () => {
+      const transaction = newrelic.getTransaction()
+      newrelic.addCustomAttribute('commandType', command.type)
+      try {
+        switch (command.type) {
+          case 'GerarOrcamento':
+            newrelic.addCustomAttribute('serviceOrderId', command.serviceOrderId)
+            await generateQuote.execute(command)
+            break
+          case 'AprovarOrcamento':
+            newrelic.addCustomAttribute('quoteId', command.quoteId)
+            await approveQuote.execute(command.quoteId)
+            break
+          case 'RejeitarOrcamento':
+            newrelic.addCustomAttribute('quoteId', command.quoteId)
+            await rejectQuote.execute(command.quoteId)
+            break
+        }
+      } catch (error) {
+        newrelic.noticeError(error as Error)
+        log.error({ err: error, command }, 'Falha ao processar comando de billing')
+      } finally {
+        transaction.end()
       }
-    } catch (error) {
-      log.error({ err: error, command }, 'Falha ao processar comando de billing')
-    }
+    })
   })
 }
