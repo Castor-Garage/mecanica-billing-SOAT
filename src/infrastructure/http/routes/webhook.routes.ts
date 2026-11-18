@@ -6,6 +6,7 @@ import { MercadoPagoPaymentProvider } from '../../providers/payment/MercadoPagoP
 import { ConfirmPaymentUseCase } from '../../../application/use-cases/payment/ConfirmPaymentUseCase.js'
 import { FailPaymentUseCase } from '../../../application/use-cases/payment/FailPaymentUseCase.js'
 import { messageBus } from '../../messaging/bus.js'
+import { DynamoPaymentAttemptRepository } from '../../database/dynamodb/DynamoPaymentAttemptRepository.js'
 
 // Webhook de notificacao de pagamento do Mercado Pago (Checkout Pro). O
 // payload da notificacao so traz o id do pagamento - o status de verdade
@@ -17,6 +18,9 @@ export async function webhookRoutes(app: FastifyInstance) {
   const paymentProvider = new MercadoPagoPaymentProvider()
   const confirmPayment = new ConfirmPaymentUseCase(paymentRepo, messageBus)
   const failPayment = new FailPaymentUseCase(paymentRepo, messageBus)
+  // Banco NoSQL exigido pelo desafio (ver RFC 0004): grava o payload bruto de
+  // toda notificacao recebida, antes de decidir confirmar/falhar o pagamento.
+  const paymentAttemptRepo = new DynamoPaymentAttemptRepository()
 
   typed.post(
     '/webhooks/mercadopago',
@@ -41,6 +45,13 @@ export async function webhookRoutes(app: FastifyInstance) {
       }
 
       const result = await paymentProvider.getPaymentStatus(data.id)
+
+      await paymentAttemptRepo.record({
+        paymentId: result.externalReference,
+        providerPaymentId: data.id,
+        status: result.status,
+        rawPayload: request.body,
+      })
 
       if (result.status === 'approved') {
         await confirmPayment.execute(result.externalReference, data.id)

@@ -28,8 +28,9 @@ assíncrona via mensageria.
 ## Estado atual (Fase 2 do backlog concluída)
 
 - [x] Consumer do comando `GerarOrcamento`/`AprovarOrcamento`/`RejeitarOrcamento`
-      e publisher dos eventos em `os-events` — hoje sobre `InMemoryMessageBus`
-      (porta `IMessageBus`), SQS real entra na Fase 5 sem mudar os use cases
+      e publisher dos eventos em `os-events` — porta `IMessageBus`, com dois
+      adapters: `InMemoryMessageBus` (testes/dev) e `SqsMessageBus` (SQS
+      real, `MESSAGE_BUS_DRIVER=sqs` — ver ADR 0006 em mecanica-pos-SOAT/docs)
 - [x] Use cases de orçamento/aprovação/pagamento (`GenerateQuoteUseCase`,
       `ApproveQuoteUseCase`, `RejectQuoteUseCase`, `ConfirmPaymentUseCase`,
       `FailPaymentUseCase`)
@@ -39,10 +40,11 @@ assíncrona via mensageria.
       token de sandbox
 - [x] Testes unitários dos use cases: 52 testes, ~97% de cobertura em
       domínio/aplicação
-- [x] Infra do banco NoSQL: tabela DynamoDB `castor-garage-billing-payment-attempts`
-      provisionada em `mecanica-db-infra-SOAT`
-- [ ] Adapter DynamoDB para `PaymentAttempt`/payloads de webhook (código)
-- [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços)
+- [ ] Banco NoSQL para `PaymentAttempt`/payloads de webhook — em decisão
+      final entre DynamoDB e MongoDB (ver PR #2, `billing-mp`)
+- [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços) —
+      o fluxo do orquestrador está coberto em
+      `mecanica-pos-SOAT/tests/unit/infrastructure/messaging/sagaConsumer.test.ts`
 - [x] Secrets de produção/staging: `billing-secret` montado pelo pipeline a
       partir do SSM Parameter Store (ver [CI/CD](#cicd))
 - [x] Migration inicial do Prisma (`prisma/migrations/*_init`)
