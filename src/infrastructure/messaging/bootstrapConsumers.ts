@@ -3,7 +3,7 @@ import { messageBus } from './bus.js'
 import { BILLING_COMMANDS_QUEUE, type BillingCommand } from '../../domain/shared/messaging/topics.js'
 import { PrismaQuoteRepository } from '../database/repositories/PrismaQuoteRepository.js'
 import { PrismaPaymentRepository } from '../database/repositories/PrismaPaymentRepository.js'
-import { MercadoPagoPaymentProvider } from '../providers/payment/MercadoPagoPaymentProvider.js'
+import { StripePaymentProvider } from '../providers/payment/StripePaymentProvider.js'
 import { GenerateQuoteUseCase } from '../../application/use-cases/quote/GenerateQuoteUseCase.js'
 import { ApproveQuoteUseCase } from '../../application/use-cases/quote/ApproveQuoteUseCase.js'
 import { RejectQuoteUseCase } from '../../application/use-cases/quote/RejectQuoteUseCase.js'
@@ -15,7 +15,7 @@ import { RejectQuoteUseCase } from '../../application/use-cases/quote/RejectQuot
 export function bootstrapBillingCommandsConsumer(log: FastifyBaseLogger): void {
   const quoteRepo = new PrismaQuoteRepository()
   const paymentRepo = new PrismaPaymentRepository()
-  const paymentProvider = new MercadoPagoPaymentProvider()
+  const paymentProvider = new StripePaymentProvider()
 
   const generateQuote = new GenerateQuoteUseCase(quoteRepo, messageBus)
   const approveQuote = new ApproveQuoteUseCase(quoteRepo, paymentRepo, paymentProvider, messageBus)

@@ -36,6 +36,11 @@ export class PrismaQuoteRepository implements IQuoteRepository {
     return row ? toRecord(row) : null
   }
 
+  async findByServiceOrderId(serviceOrderId: string): Promise<QuoteRecord[]> {
+    const rows = await prisma.quote.findMany({ where: { serviceOrderId }, orderBy: { createdAt: 'desc' } })
+    return rows.map(toRecord)
+  }
+
   async approve(id: string): Promise<QuoteRecord> {
     const row = await prisma.quote.update({
       where: { id },

@@ -2,6 +2,7 @@ export interface CreatePreferenceInput {
   // Nosso Payment.id, enviado como external_reference ao provedor para
   // conseguirmos correlacionar o pagamento de volta quando o webhook chegar.
   externalReference: string
+  serviceOrderId: string
   description: string
   amount: number
 }
