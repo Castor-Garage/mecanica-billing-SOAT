@@ -4,10 +4,14 @@ metadata:
   name: billing-api
   labels:
     app: billing-api
+# LoadBalancer (e nao ClusterIP) so por causa do webhook do Mercado Pago
+# (POST /webhooks/mercadopago), que precisa de uma URL publica. O resto da
+# integracao com o OS Service e assincrona via SQS. O pipeline publica a URL
+# do webhook em /castor-garage/<ambiente>/billing-webhook-url (SSM).
 spec:
   selector:
     app: billing-api
-  type: ClusterIP
+  type: LoadBalancer
   ports:
     - port: 3000
       targetPort: 3000

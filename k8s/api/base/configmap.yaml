@@ -6,12 +6,15 @@ data:
   PORT: "3000"
   HOST: "0.0.0.0"
   NODE_ENV: "production"
+  AWS_REGION: "us-east-1"
   NEW_RELIC_APP_NAME: "BILLING-SOAT-CASTOR"
   NEW_RELIC_AI_MONITORING_ENABLED: "true"
   NEW_RELIC_CUSTOM_INSIGHTS_EVENTS_MAX_SAMPLES_STORED: "100k"
   NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED: "10k"
   MONGO_DB_NAME: "mecanica_billing"
-  AWS_REGION: "us-east-1"
+  # Vazio = adapter em memoria. Producao liga o SQS no overlay; staging fica
+  # em memoria porque nao tem filas proprias (ver pipeline).
+  MESSAGE_BUS_DRIVER: ""
   # Preencher com a URL pública do ingress/load balancer antes do deploy
   WEBHOOK_BASE_URL: ""
   FRONTEND_URL: ""

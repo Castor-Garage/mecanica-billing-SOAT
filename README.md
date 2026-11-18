@@ -40,14 +40,14 @@ assíncrona via mensageria.
       token de sandbox
 - [x] Testes unitários dos use cases: 52 testes, ~97% de cobertura em
       domínio/aplicação
-- [x] Banco NoSQL (DynamoDB) para `PaymentAttempt`/payloads de webhook —
-      `DynamoPaymentAttemptRepository`, tabela provisionada em
-      `mecanica-db-infra-SOAT/dynamodb.tf` (ver RFC 0004)
+- [ ] Banco NoSQL para `PaymentAttempt`/payloads de webhook — em decisão
+      final entre DynamoDB e MongoDB (ver PR #2, `billing-mp`)
 - [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços) —
       o fluxo do orquestrador está coberto em
       `mecanica-pos-SOAT/tests/unit/infrastructure/messaging/sagaConsumer.test.ts`
-- [ ] Secrets de produção/staging (`billing-secret`: `DATABASE_URL`,
-      `NEW_RELIC_LICENSE_KEY`, credenciais do Mercado Pago)
+- [x] Secrets de produção/staging: `billing-secret` montado pelo pipeline a
+      partir do SSM Parameter Store (ver [CI/CD](#cicd))
+- [x] Migration inicial do Prisma (`prisma/migrations/*_init`)
 - [ ] Testar a integração com um access token de sandbox do Mercado Pago
 
 ## Testar a integração com Mercado Pago (sandbox)
@@ -91,6 +91,19 @@ Nenhuma relação de banco com o OS Service ou o Execução Service — toda
 referência entre eles é por id lógico (`serviceOrderId`), recebido via
 mensageria.
 
+As migrations ficam em `prisma/migrations/` e são aplicadas pelo próprio
+container ao subir (`prisma migrate deploy` no `CMD` do Dockerfile). Para
+mudar o schema: edite `schema.prisma` e rode `npm run db:migrate` com um
+Postgres local, que gera a nova migration.
+
+Além do Postgres, o serviço grava os payloads crus de webhook
+(`PaymentAttempt`) num banco NoSQL — o exigido pela Fase 4. O código atual
+usa **MongoDB** (`NOSQL_CONNECTION_STRING` + `MONGO_DB_NAME`), que ainda não
+é provisionado por nenhum repositório; `mecanica-db-infra-SOAT` provisiona
+o Postgres e uma tabela **DynamoDB** (`castor-garage-billing-payment-attempts`)
+que fica sem uso até a decisão entre os dois fechar. O client do Mongo só
+conecta quando chega um webhook, então o serviço sobe sem ele.
+
 ## Rodar localmente
 
 ```bash
@@ -129,6 +142,38 @@ Secrets necessários no repositório (GitHub Actions): `AWS_ACCESS_KEY_ID`,
 vendedor — ver "Testar a integração com Mercado Pago (sandbox)" acima);
 sem ele o smoke test real do Mercado Pago só é pulado, o resto do pipeline
 roda normalmente.
+
+### Secret do Kubernetes (`billing-secret`)
+
+Nada é criado à mão no cluster: a cada deploy o pipeline monta o
+`billing-secret` lendo o SSM Parameter Store, e o step falha se algum
+parâmetro não existir.
+
+| Chave | Origem |
+|---|---|
+| `DATABASE_URL` | SSM `/castor-garage/billing/database-url` (`-staging` em staging) — `mecanica-db-infra-SOAT` |
+| `SQS_BILLING_COMMANDS_QUEUE_URL`, `SQS_OS_EVENTS_QUEUE_URL` | SSM `/castor-garage/queues/*-url` — `mecanica-k8s-infra-SOAT` (só em produção) |
+| `NEW_RELIC_LICENSE_KEY`, `MERCADOPAGO_ACCESS_TOKEN` | secrets do GitHub |
+| `MERCADOPAGO_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NOSQL_CONNECTION_STRING` | secrets do GitHub (opcionais: sem o secret, a chave vai vazia) |
+
+Staging não recebe URLs de fila: só existe um conjunto de filas SQS e um
+consumer de staging roubaria mensagens da saga de produção. Por isso
+`MESSAGE_BUS_DRIVER` é `sqs` só no overlay de produção; staging usa o
+adapter em memória. As credenciais AWS para o SQS não vão no Secret: os
+pods usam a LabRole dos nodes do EKS.
+
+**Ordem de deploy**: o `terraform apply` de `mecanica-k8s-infra-SOAT`
+(cluster + filas) e de `mecanica-db-infra-SOAT` (bancos) precisa ter rodado
+antes do primeiro deploy deste serviço.
+
+### Webhook do Mercado Pago
+
+O Service `billing-api` é `LoadBalancer` só para o webhook ter uma URL
+pública. Depois do rollout o pipeline faz um smoke test em `/health`,
+publica a URL completa do webhook em
+`/castor-garage/<ambiente>/billing-webhook-url` (SSM) e mostra a URL no
+resumo da execução do GitHub Actions — é essa URL que vai no cadastro de
+**Webhooks** da aplicação no painel do Mercado Pago.
 
 ## Saga Pattern
 
