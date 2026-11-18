@@ -28,8 +28,9 @@ assíncrona via mensageria.
 ## Estado atual (Fase 2 do backlog concluída)
 
 - [x] Consumer do comando `GerarOrcamento`/`AprovarOrcamento`/`RejeitarOrcamento`
-      e publisher dos eventos em `os-events` — hoje sobre `InMemoryMessageBus`
-      (porta `IMessageBus`), SQS real entra na Fase 5 sem mudar os use cases
+      e publisher dos eventos em `os-events` — porta `IMessageBus`, com dois
+      adapters: `InMemoryMessageBus` (testes/dev) e `SqsMessageBus` (SQS
+      real, `MESSAGE_BUS_DRIVER=sqs` — ver ADR 0006 em mecanica-pos-SOAT/docs)
 - [x] Use cases de orçamento/aprovação/pagamento (`GenerateQuoteUseCase`,
       `ApproveQuoteUseCase`, `RejectQuoteUseCase`, `ConfirmPaymentUseCase`,
       `FailPaymentUseCase`)
@@ -39,8 +40,12 @@ assíncrona via mensageria.
       token de sandbox
 - [x] Testes unitários dos use cases: 52 testes, ~97% de cobertura em
       domínio/aplicação
-- [ ] Banco NoSQL (MongoDB/DynamoDB) para `PaymentAttempt`/payloads de webhook
-- [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços)
+- [x] Banco NoSQL (DynamoDB) para `PaymentAttempt`/payloads de webhook —
+      `DynamoPaymentAttemptRepository`, tabela provisionada em
+      `mecanica-db-infra-SOAT/dynamodb.tf` (ver RFC 0004)
+- [ ] 1 fluxo completo testado com BDD (ponta a ponta com os 3 serviços) —
+      o fluxo do orquestrador está coberto em
+      `mecanica-pos-SOAT/tests/unit/infrastructure/messaging/sagaConsumer.test.ts`
 - [ ] Secrets de produção/staging (`billing-secret`: `DATABASE_URL`,
       `NEW_RELIC_LICENSE_KEY`, credenciais do Mercado Pago)
 - [ ] Testar a integração com um access token de sandbox do Mercado Pago

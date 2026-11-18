@@ -21,6 +21,9 @@
     "mp:create-test-users": "tsx scripts/create-mp-test-users.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1171.0",
+    "@aws-sdk/client-sqs": "^3.1171.0",
+    "@aws-sdk/lib-dynamodb": "^3.1171.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/pg": "^8.20.0",
