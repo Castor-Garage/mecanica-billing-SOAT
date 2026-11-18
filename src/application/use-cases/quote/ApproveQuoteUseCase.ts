@@ -35,6 +35,7 @@ export class ApproveQuoteUseCase {
 
     const preference = await this.paymentProvider.createPreference({
       externalReference: paymentId,
+      serviceOrderId: approved.serviceOrderId,
       description: `Orçamento da OS ${approved.serviceOrderId}`,
       amount: approved.totalAmount,
     })

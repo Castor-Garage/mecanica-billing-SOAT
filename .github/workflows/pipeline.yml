@@ -134,30 +134,36 @@ jobs:
         run: kubectl apply -f k8s/api/overlays/production/namespace.yaml
 
       # billing-secret e (re)criado a cada deploy, sem nada aplicado a mao no
-      # cluster: banco e tabela DynamoDB vem do SSM publicado por
-      # mecanica-db-infra-SOAT, filas do SSM publicado por
-      # mecanica-k8s-infra-SOAT, e as chaves de terceiros (New Relic, Mercado
-      # Pago) dos secrets do GitHub. Le cada parametro numa variavel antes de
-      # montar o Secret para o step falhar (set -e) se algum nao existir.
+      # cluster: banco vem do SSM publicado por mecanica-db-infra-SOAT, filas
+      # do SSM publicado por mecanica-k8s-infra-SOAT, e as chaves de terceiros
+      # (New Relic, Mercado Pago, Stripe, MongoDB) dos secrets do GitHub - as
+      # que faltarem vao vazias. Le cada parametro do SSM numa variavel antes
+      # de montar o Secret para o step falhar (set -e) se algum nao existir.
       - name: Montar Secret do servico a partir do SSM (production)
         run: |
           ssm() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text; }
           DATABASE_URL=$(ssm /castor-garage/billing/database-url)
           echo "::add-mask::${DATABASE_URL}"
-          PAYMENT_ATTEMPTS_TABLE=$(ssm /castor-garage/billing/payment-attempts-table)
           BILLING_COMMANDS_URL=$(ssm /castor-garage/queues/billing-commands-url)
           OS_EVENTS_URL=$(ssm /castor-garage/queues/os-events-url)
           kubectl --context "${EKS_CLUSTER}" -n castor-garage-production create secret generic billing-secret \
             --from-literal=DATABASE_URL="${DATABASE_URL}" \
-            --from-literal=DYNAMODB_PAYMENT_ATTEMPTS_TABLE="${PAYMENT_ATTEMPTS_TABLE}" \
             --from-literal=SQS_BILLING_COMMANDS_QUEUE_URL="${BILLING_COMMANDS_URL}" \
             --from-literal=SQS_OS_EVENTS_QUEUE_URL="${OS_EVENTS_URL}" \
             --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
             --from-literal=MERCADOPAGO_ACCESS_TOKEN="${MERCADOPAGO_ACCESS_TOKEN}" \
+            --from-literal=MERCADOPAGO_WEBHOOK_SECRET="${MERCADOPAGO_WEBHOOK_SECRET}" \
+            --from-literal=STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET}" \
+            --from-literal=NOSQL_CONNECTION_STRING="${NOSQL_CONNECTION_STRING}" \
             --dry-run=client -o yaml | kubectl --context "${EKS_CLUSTER}" apply -f -
         env:
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          NOSQL_CONNECTION_STRING: ${{ secrets.NOSQL_CONNECTION_STRING }}
 
       - name: Patch da tag de imagem (production)
         run: |
@@ -244,16 +250,22 @@ jobs:
           ssm() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text; }
           DATABASE_URL=$(ssm /castor-garage/billing/database-url-staging)
           echo "::add-mask::${DATABASE_URL}"
-          PAYMENT_ATTEMPTS_TABLE=$(ssm /castor-garage/billing/payment-attempts-table)
           kubectl --context "${EKS_CLUSTER}" -n castor-garage-staging create secret generic billing-secret \
             --from-literal=DATABASE_URL="${DATABASE_URL}" \
-            --from-literal=DYNAMODB_PAYMENT_ATTEMPTS_TABLE="${PAYMENT_ATTEMPTS_TABLE}" \
             --from-literal=NEW_RELIC_LICENSE_KEY="${NEW_RELIC_LICENSE_KEY}" \
             --from-literal=MERCADOPAGO_ACCESS_TOKEN="${MERCADOPAGO_ACCESS_TOKEN}" \
+            --from-literal=MERCADOPAGO_WEBHOOK_SECRET="${MERCADOPAGO_WEBHOOK_SECRET}" \
+            --from-literal=STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET}" \
+            --from-literal=NOSQL_CONNECTION_STRING="${NOSQL_CONNECTION_STRING}" \
             --dry-run=client -o yaml | kubectl --context "${EKS_CLUSTER}" apply -f -
         env:
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          NOSQL_CONNECTION_STRING: ${{ secrets.NOSQL_CONNECTION_STRING }}
 
       - name: Patch da tag de imagem (staging)
         run: |

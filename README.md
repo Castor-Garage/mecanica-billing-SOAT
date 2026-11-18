@@ -96,11 +96,13 @@ container ao subir (`prisma migrate deploy` no `CMD` do Dockerfile). Para
 mudar o schema: edite `schema.prisma` e rode `npm run db:migrate` com um
 Postgres local, que gera a nova migration.
 
-Além do Postgres, o serviço tem uma tabela **DynamoDB**
-(`castor-garage-billing-payment-attempts`, chave `paymentId` + `receivedAt`)
-para os payloads crus de webhook do Mercado Pago — o banco NoSQL exigido
-pela Fase 4. Os dois bancos são provisionados em
-[`mecanica-db-infra-SOAT`](https://github.com/Castor-Garage/mecanica-db-infra-SOAT).
+Além do Postgres, o serviço grava os payloads crus de webhook
+(`PaymentAttempt`) num banco NoSQL — o exigido pela Fase 4. O código atual
+usa **MongoDB** (`NOSQL_CONNECTION_STRING` + `MONGO_DB_NAME`), que ainda não
+é provisionado por nenhum repositório; `mecanica-db-infra-SOAT` provisiona
+o Postgres e uma tabela **DynamoDB** (`castor-garage-billing-payment-attempts`)
+que fica sem uso até a decisão entre os dois fechar. O client do Mongo só
+conecta quando chega um webhook, então o serviço sobe sem ele.
 
 ## Rodar localmente
 
@@ -150,14 +152,15 @@ parâmetro não existir.
 | Chave | Origem |
 |---|---|
 | `DATABASE_URL` | SSM `/castor-garage/billing/database-url` (`-staging` em staging) — `mecanica-db-infra-SOAT` |
-| `DYNAMODB_PAYMENT_ATTEMPTS_TABLE` | SSM `/castor-garage/billing/payment-attempts-table` — `mecanica-db-infra-SOAT` |
 | `SQS_BILLING_COMMANDS_QUEUE_URL`, `SQS_OS_EVENTS_QUEUE_URL` | SSM `/castor-garage/queues/*-url` — `mecanica-k8s-infra-SOAT` (só em produção) |
 | `NEW_RELIC_LICENSE_KEY`, `MERCADOPAGO_ACCESS_TOKEN` | secrets do GitHub |
+| `MERCADOPAGO_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NOSQL_CONNECTION_STRING` | secrets do GitHub (opcionais: sem o secret, a chave vai vazia) |
 
 Staging não recebe URLs de fila: só existe um conjunto de filas SQS e um
-consumer de staging roubaria mensagens da saga de produção. As credenciais
-AWS para SQS/DynamoDB não vão no Secret: os pods usam a LabRole dos nodes
-do EKS.
+consumer de staging roubaria mensagens da saga de produção. Por isso
+`MESSAGE_BUS_DRIVER` é `sqs` só no overlay de produção; staging usa o
+adapter em memória. As credenciais AWS para o SQS não vão no Secret: os
+pods usam a LabRole dos nodes do EKS.
 
 **Ordem de deploy**: o `terraform apply` de `mecanica-k8s-infra-SOAT`
 (cluster + filas) e de `mecanica-db-infra-SOAT` (bancos) precisa ter rodado

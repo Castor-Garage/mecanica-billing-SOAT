@@ -4,3 +4,4 @@ metadata:
   name: billing-config
 data:
   NODE_ENV: "production"
+  MESSAGE_BUS_DRIVER: "sqs"

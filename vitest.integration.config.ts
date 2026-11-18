@@ -30,8 +30,18 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
       reportsDirectory: 'coverage/integration',
-      include: ['src/domain/**', 'src/application/**'],
-      exclude: ['src/domain/**/I*.ts'],
+      include: [
+        'src/domain/**',
+        'src/application/**',
+        'src/infrastructure/http/**',
+        'src/infrastructure/messaging/InMemoryMessageBus.ts',
+        'src/shared/**',
+      ],
+      exclude: [
+        'src/domain/**/I*.ts',
+        'src/infrastructure/http/server.ts',
+        'src/infrastructure/http/routes/debug.routes.ts',
+      ],
     },
   },
   resolve: {

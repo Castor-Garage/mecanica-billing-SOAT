@@ -66,23 +66,64 @@ spec:
                 configMapKeyRef:
                   name: billing-config
                   key: NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED
-            # Credenciais AWS (SQS/DynamoDB) vem da LabRole dos nodes via IMDS -
-            # nao ha access key aqui, so a regiao.
+            # Credenciais AWS (SQS) vem da LabRole dos nodes via IMDS - nao ha
+            # access key aqui, so a regiao.
             - name: AWS_REGION
               valueFrom:
                 configMapKeyRef:
                   name: billing-config
                   key: AWS_REGION
-            - name: DYNAMODB_PAYMENT_ATTEMPTS_TABLE
-              valueFrom:
-                secretKeyRef:
-                  name: billing-secret
-                  key: DYNAMODB_PAYMENT_ATTEMPTS_TABLE
             - name: MERCADOPAGO_ACCESS_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: billing-secret
                   key: MERCADOPAGO_ACCESS_TOKEN
+            - name: MERCADOPAGO_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: MERCADOPAGO_WEBHOOK_SECRET
+                  optional: true
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: STRIPE_SECRET_KEY
+                  optional: true
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: STRIPE_WEBHOOK_SECRET
+                  optional: true
+            # MongoDB do PaymentAttempt: o client so conecta quando chega um
+            # webhook, entao o pod sobe mesmo sem a connection string.
+            - name: NOSQL_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: billing-secret
+                  key: NOSQL_CONNECTION_STRING
+                  optional: true
+            - name: MONGO_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: MONGO_DB_NAME
+            - name: WEBHOOK_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: WEBHOOK_BASE_URL
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: FRONTEND_URL
+            - name: MESSAGE_BUS_DRIVER
+              valueFrom:
+                configMapKeyRef:
+                  name: billing-config
+                  key: MESSAGE_BUS_DRIVER
             # Opcionais: so existem em producao (staging nao tem filas proprias
             # - ver pipeline).
             - name: SQS_BILLING_COMMANDS_QUEUE_URL
