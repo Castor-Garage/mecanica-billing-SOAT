@@ -22,6 +22,9 @@ export class MercadoPagoPaymentProvider implements IPaymentProvider {
   }
 
   async createPreference(input: CreatePreferenceInput): Promise<CreatePreferenceResult> {
+    const webhookBase = process.env.WEBHOOK_BASE_URL ?? ''
+    const frontendUrl = process.env.FRONTEND_URL ?? ''
+
     try {
       const response = await this.preferenceClient.create({
         body: {
@@ -34,6 +37,17 @@ export class MercadoPagoPaymentProvider implements IPaymentProvider {
               unit_price: input.amount,
             },
           ],
+          ...(webhookBase && {
+            notification_url: `${webhookBase}/webhooks/mercadopago`,
+          }),
+          ...(frontendUrl && {
+            back_urls: {
+              success: `${frontendUrl}/pagamento/sucesso`,
+              failure: `${frontendUrl}/pagamento/falha`,
+              pending: `${frontendUrl}/pagamento/pendente`,
+            },
+            auto_return: 'approved' as const,
+          }),
         },
       })
 

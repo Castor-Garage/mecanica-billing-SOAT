@@ -44,6 +44,11 @@ export class PrismaPaymentRepository implements IPaymentRepository {
     return row ? toRecord(row) : null
   }
 
+  async findByQuoteId(quoteId: string): Promise<PaymentRecord[]> {
+    const rows = await prisma.payment.findMany({ where: { quoteId }, orderBy: { createdAt: 'desc' } })
+    return rows.map(toRecord)
+  }
+
   async confirm(id: string, providerPaymentId: string): Promise<PaymentRecord> {
     const row = await prisma.payment.update({
       where: { id },

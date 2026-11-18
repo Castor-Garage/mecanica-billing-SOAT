@@ -7,7 +7,9 @@ import {
 } from '../../../domain/shared/messaging/topics.js'
 import { NotFoundError } from '../../../shared/errors/AppError.js'
 
-// Acionado pelo webhook do Mercado Pago quando o pagamento e aprovado.
+const OS_SERVICE_URL = process.env.OS_SERVICE_URL ?? 'http://localhost:3001'
+
+// Acionado pelo webhook do Stripe quando o pagamento e aprovado.
 export class ConfirmPaymentUseCase {
   constructor(
     private readonly paymentRepo: IPaymentRepository,
@@ -30,6 +32,13 @@ export class ConfirmPaymentUseCase {
       quoteId: confirmed.quoteId,
       paymentId: confirmed.id,
     })
+
+    // Notifica o OS service diretamente (fallback para ambiente sem SQS)
+    await fetch(`${OS_SERVICE_URL}/internal/payment-confirmed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceOrderId: confirmed.serviceOrderId }),
+    }).catch(() => { /* não bloqueia se OS service estiver indisponível */ })
 
     return confirmed
   }
