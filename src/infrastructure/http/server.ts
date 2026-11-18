@@ -1,4 +1,5 @@
 import Fastify, { type FastifyError } from 'fastify'
+import cors from '@fastify/cors'
 import {
   serializerCompiler,
   validatorCompiler,
@@ -33,6 +34,8 @@ export async function buildServer() {
   }).withTypeProvider<ZodTypeProvider>()
 
   const events = new BusinessEventLogger(app.log)
+
+  await app.register(cors, { origin: true })
 
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)

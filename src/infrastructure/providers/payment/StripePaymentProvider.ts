@@ -30,7 +30,7 @@ export class StripePaymentProvider implements IPaymentProvider {
           },
         ],
         mode: 'payment',
-        success_url: `${frontendUrl}/pagamento/sucesso?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${frontendUrl}/pagamento/sucesso?session_id={CHECKOUT_SESSION_ID}&os=${input.serviceOrderId}`,
         cancel_url: `${frontendUrl}/pagamento/cancelado`,
         metadata: { paymentId: input.externalReference },
       })
