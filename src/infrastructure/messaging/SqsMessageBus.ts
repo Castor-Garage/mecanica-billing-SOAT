@@ -3,73 +3,90 @@ import {
   SendMessageCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
+  GetQueueUrlCommand,
 } from '@aws-sdk/client-sqs'
 import type { IMessageBus } from '../../domain/shared/messaging/IMessageBus.js'
 
-type Handler = (message: unknown) => Promise<void>
-
-// Adapter SQS para staging/producao. Publish envia para a fila pelo URL.
-// Subscribe inicia um loop de long polling (20s) numa Promise que nao bloqueia
-// o processo - erros sao logados e o loop recomeça apos 5s.
+// Adapter real de mensageria (ver ADR 0006) - usa Amazon SQS, ou qualquer
+// endpoint compativel (ex. LocalStack via SQS_ENDPOINT, usado para rodar a
+// saga localmente sem depender da conta AWS Academy). Resolve a URL de cada
+// fila por nome logico (ex. "billing-commands"):
+//   1. variavel SQS_<NOME_DA_FILA>_QUEUE_URL (ex. SQS_BILLING_COMMANDS_QUEUE_URL),
+//      publicada via SSM/Terraform em producao - mesma convencao ja usada
+//      nos .env.example antes deste adapter existir;
+//   2. GetQueueUrl pelo proprio nome, como fallback (ambiente local).
 export class SqsMessageBus implements IMessageBus {
   private readonly client: SQSClient
-  private readonly handlers = new Map<string, Handler[]>()
+  private readonly queueUrlCache = new Map<string, string>()
+  private readonly activePollers = new Set<string>()
 
   constructor() {
-    this.client = new SQSClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
+    this.client = new SQSClient({
+      region: process.env.AWS_REGION ?? 'us-east-1',
+      ...(process.env.SQS_ENDPOINT ? { endpoint: process.env.SQS_ENDPOINT } : {}),
+    })
   }
 
-  async publish<T>(queueUrl: string, message: T): Promise<void> {
+  async publish<T>(queue: string, message: T): Promise<void> {
+    const queueUrl = await this.resolveQueueUrl(queue)
     await this.client.send(
-      new SendMessageCommand({
-        QueueUrl: queueUrl,
-        MessageBody: JSON.stringify(message),
-      }),
+      new SendMessageCommand({ QueueUrl: queueUrl, MessageBody: JSON.stringify(message) }),
     )
   }
 
-  subscribe<T>(queueUrl: string, handler: (message: T) => Promise<void>): void {
-    const handlers = this.handlers.get(queueUrl) ?? []
-    handlers.push(handler as Handler)
-    this.handlers.set(queueUrl, handlers)
-
-    // Inicia o loop de polling apenas uma vez por fila
-    if (handlers.length === 1) {
-      this.startPolling(queueUrl)
-    }
+  subscribe<T>(queue: string, handler: (message: T) => Promise<void>): void {
+    if (this.activePollers.has(queue)) return
+    this.activePollers.add(queue)
+    void this.poll(queue, handler)
   }
 
-  private startPolling(queueUrl: string): void {
-    const poll = async () => {
-      while (true) {
-        try {
-          const response = await this.client.send(
-            new ReceiveMessageCommand({
-              QueueUrl: queueUrl,
-              MaxNumberOfMessages: 10,
-              WaitTimeSeconds: 20,
-            }),
-          )
+  private async poll<T>(queue: string, handler: (message: T) => Promise<void>): Promise<void> {
+    const queueUrl = await this.resolveQueueUrl(queue)
 
-          for (const msg of response.Messages ?? []) {
-            const body = JSON.parse(msg.Body ?? '{}') as unknown
-            const handlers = this.handlers.get(queueUrl) ?? []
-            for (const handler of handlers) {
-              await handler(body)
-            }
+    // Long polling continuo - roda ate o processo encerrar (ver bootstrapConsumers.ts)
+    for (;;) {
+      const { Messages } = await this.client.send(
+        new ReceiveMessageCommand({
+          QueueUrl: queueUrl,
+          MaxNumberOfMessages: 10,
+          WaitTimeSeconds: 20,
+        }),
+      )
+
+      for (const msg of Messages ?? []) {
+        try {
+          if (msg.Body) {
+            await handler(JSON.parse(msg.Body) as T)
+          }
+          if (msg.ReceiptHandle) {
             await this.client.send(
-              new DeleteMessageCommand({
-                QueueUrl: queueUrl,
-                ReceiptHandle: msg.ReceiptHandle,
-              }),
+              new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: msg.ReceiptHandle }),
             )
           }
         } catch {
-          await new Promise((r) => setTimeout(r, 5000))
+          // Nao apaga a mensagem: volta a fila apos o visibility timeout e e
+          // reprocessada (ou cai na DLQ, se configurada no Terraform).
         }
       }
     }
+  }
 
-    poll().catch(() => {})
+  private async resolveQueueUrl(queue: string): Promise<string> {
+    const cached = this.queueUrlCache.get(queue)
+    if (cached) return cached
+
+    const envKey = `SQS_${queue.toUpperCase().replace(/-/g, '_')}_QUEUE_URL`
+    const fromEnv = process.env[envKey]
+    if (fromEnv) {
+      this.queueUrlCache.set(queue, fromEnv)
+      return fromEnv
+    }
+
+    const { QueueUrl } = await this.client.send(new GetQueueUrlCommand({ QueueName: queue }))
+    if (!QueueUrl) {
+      throw new Error(`Fila "${queue}" não encontrada (defina ${envKey} ou crie a fila com esse nome)`)
+    }
+    this.queueUrlCache.set(queue, QueueUrl)
+    return QueueUrl
   }
 }
